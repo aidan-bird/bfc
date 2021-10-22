@@ -1,0 +1,9 @@
+src/testing.c
+.obj
+.obj/*
+tests/.obj
+tests/.obj/*
+tests/testing
+testing
+.gdb_history
+bfc
