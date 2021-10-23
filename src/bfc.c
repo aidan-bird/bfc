@@ -3,16 +3,20 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "./bfc_ir.h"
 #include "../alib/src/utils.h"
 #include "../alib/src/array.h"
 
 int
 main(int argc, char **argv)
 {
-    const char *src;
+    char *src;
+    Array *bfir;
 
     src = readTextFile(stdin, NULL);
-    puts(src);
+    removeNonBFKeywordsInplace(src);
+    bfir = srcToBFIR(src);
     free((char *)src);
+    deleteArray(bfir);
     return 0;
 }
