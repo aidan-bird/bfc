@@ -40,8 +40,9 @@ isBFCKeyword(int c)
         case '[':
         case ']':
             return 1;
+        default:
+            return 0;
     }
-    return 0;
 }
 
 /*
@@ -84,14 +85,14 @@ removeNonBFKeywordsInplace(char *src)
 size_t
 countConsecutiveChars(const char *str)
 {
-    size_t ret;
     int c;
+    const char *tmp;
 
-    ret = 0;
     c = *str;
+    tmp = str;
     while (*str && *str == c)
         str++;
-    return ret;
+    return str - tmp;
 }
 
 /*
@@ -108,24 +109,31 @@ Array *
 srcToBFIR(const char *src)
 {
     Array *ret;
-    Array *tmp;
     size_t count;
     BFIR nextBFIR;
+    const BFIR termIR = (BFIR) {
+        .count = 0,
+        .keyword = BFKeyword_eof,
+    };
 
     ret = newArray(-1, -1, sizeof(BFIR));
     if (!ret)
         goto error1;
     while (*src) {
         nextBFIR.keyword = _charKeywordMap[*src];
-        count = countConsecutiveChars(src);
+        if (nextBFIR.keyword == BFKeyword_setLabel
+            || nextBFIR.keyword == BFKeyword_jump) {
+            count = 1;
+        } else {
+            count = countConsecutiveChars(src);
+        }
         nextBFIR.count = count;
         src += count;
-        tmp = pushArray(ret, &nextBFIR);
-        if (!tmp)
+        if (!tryPushArray(&ret, &nextBFIR))
             goto error2;
-        ret = tmp;
-        src++;
     }
+    if (!tryPushArray(&ret, &termIR))
+        goto error2;
     return ret;
 error2:;
     deleteArray(ret);
@@ -133,3 +141,40 @@ error1:;
     return NULL;
 }
 
+int
+isBasicBFKeyword(BFKeyword keyword)
+{
+    switch (keyword) {
+        case BFKeyword_up:
+        case BFKeyword_down:
+        case BFKeyword_inc:
+        case BFKeyword_dec:
+            return 1;
+        default:
+            return 0;
+    }
+}
+
+int
+isIOBFKeyword(BFKeyword keyword)
+{
+    switch (keyword) {
+        case BFKeyword_print:
+        case BFKeyword_read:
+            return 1;
+        default:
+            return 0;
+    }
+}
+
+int
+isBranchBFKeyword(BFKeyword keyword)
+{
+    switch (keyword) {
+        case BFKeyword_setLabel:
+        case BFKeyword_jump:
+            return 1;
+        default:
+            return 0;
+    }
+}

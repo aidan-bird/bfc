@@ -17,6 +17,7 @@ enum BFKeyword
     BFKeyword_read,
     BFKeyword_setLabel,
     BFKeyword_jump,
+    BFKeyword_eof,
 };
 
 typedef enum BFKeyword BFKeyword;
@@ -30,7 +31,9 @@ struct BFIR
 Array *srcToBFIR(const char *src);
 int isBFCKeyword(int c);
 void removeNonBFKeywordsInplace(char *src);
-
 extern const BFKeyword *charKeywordMap;
+int isBasicBFKeyword(BFKeyword keyword);
+int isIOBFKeyword(BFKeyword keyword);
+int isBranchBFKeyword(BFKeyword keyword);
 
 #endif
