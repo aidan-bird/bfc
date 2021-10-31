@@ -186,6 +186,7 @@ parseSection(BFSyntaxTree *syntaxTree, const BFIR *bfcode, Array **section)
         // return ret;
     }
     /* brackets are closed forming a section */
+    syntaxTree->nodes++;
     childrenCount = thisSectionChildren->count;
     thisSectionChildrenIsArray = 0;
     arrayToRaw(thisSectionChildren, -1);
@@ -284,6 +285,11 @@ error1:;
     return NULL;
 }
 
+int
+parseRoot(BFSyntaxTree *syntaxTree, const BFIR *bfcode, Array **section)
+{
+}
+
 BFSyntaxTree *
 parseBF(const Array *bfir)
 {
@@ -298,8 +304,13 @@ parseBF(const Array *bfir)
     if (!ret)
         goto error2;
     ret->raw = raw;
-    if (!parseSection(ret, (const BFIR *)getElementArray(bfir, 0), NULL))
+    ret->nodes = 0;
+
+    // if (!parseSection(ret, (const BFIR *)getElementArray(bfir, 0), NULL))
+    //     goto error3;
+    if (!parseRoot(ret, (const BFIR *)getElementArray(bfir, 0), NULL))
         goto error3;
+
     ret->start = (const BFCodeLex *)getElementVLArray(ret->raw, 0);
     return ret;
 error3:;

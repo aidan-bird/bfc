@@ -65,6 +65,7 @@ struct BFCodeLex
 
 struct BFSyntaxTree
 {
+    size_t nodes;
     VLArray *raw;
     const BFCodeLex *start;
 };
