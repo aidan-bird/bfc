@@ -11,6 +11,7 @@
 int
 main(int argc, char **argv)
 {
+    char *str;
     char *src;
     Array *bfir;
     BFSyntaxTree *tree;
@@ -19,6 +20,10 @@ main(int argc, char **argv)
     removeNonBFKeywordsInplace(src);
     bfir = srcToBFIR(src);
     tree = parseBF(bfir);
+    str = printBFSyntaxTree(tree);
+    puts(str);
+    if (str)
+        free(str);
     deleteBFSyntaxTree(tree);
     free((char *)src);
     deleteArray(bfir);

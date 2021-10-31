@@ -4,6 +4,7 @@
 #include <stddef.h>
 
 #include "../alib/src/array.h"
+#include "../alib/src/vlarray.h"
 
 typedef struct BFIR BFIR;
 
@@ -31,9 +32,12 @@ struct BFIR
 Array *srcToBFIR(const char *src);
 int isBFCKeyword(int c);
 void removeNonBFKeywordsInplace(char *src);
-extern const BFKeyword *charKeywordMap;
 int isBasicBFKeyword(BFKeyword keyword);
 int isIOBFKeyword(BFKeyword keyword);
 int isBranchBFKeyword(BFKeyword keyword);
+int pushBFIRString(VLArray **str, const BFIR *restrict bfir);
+
+extern const BFKeyword *charKeywordMap;
+extern const char *keywordCharMap;
 
 #endif

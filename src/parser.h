@@ -60,7 +60,7 @@ struct BFCodeLex
         struct BFCodeSequence {
             size_t bfCodeIndex;
         } sequence;
-    };
+    } children;
 };
 
 struct BFSyntaxTree
@@ -71,20 +71,7 @@ struct BFSyntaxTree
 
 BFSyntaxTree *parseBF(const Array *BFIR);
 void deleteBFSyntaxTree(BFSyntaxTree *tree);
-BFCodeLex *pushEmptyBFCodeSequence(BFSyntaxTree *syntaxTree);
-BFCodeLex *pushBFCodeSequence(BFSyntaxTree *syntaxTree, const BFIR *bfcode,
-    size_t n, LexType lexType);
-const BFIR *parseIOExpr(BFSyntaxTree *syntaxTree, const BFIR *bfcode,
-    Array **section);
-const BFIR *parseBasicExpr(BFSyntaxTree *syntaxTree, const BFIR *bfcode,
-    Array **section);
-const BFIR *parseExpr(BFSyntaxTree *syntaxTree, const BFIR *bfcode,
-    Array **section);
-const BFIR *parseExprs(BFSyntaxTree *syntaxTree, const BFIR *bfcode,
-    Array **section);
-const BFIR *parseSection(BFSyntaxTree *syntaxTree, const BFIR *bfcode,
-    Array **section);
-
+char *printBFSyntaxTree(const BFSyntaxTree *tree);
 
 #endif
 

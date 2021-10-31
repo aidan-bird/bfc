@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "./parser.h"
 #include "./bfc_ir.h"
@@ -7,54 +8,76 @@
 #include "../alib/src/vlarray.h"
 #include "../alib/src/utils.h"
 
-/* XXX store index instead of pointer!!! */
-
 typedef const BFIR * (*ParsingFunc)(BFSyntaxTree *, const BFIR *,
     Array **section);
+int pushBFSection(BFSyntaxTree *syntaxTree, Array **section);
+int pushBFCodeSequence(BFSyntaxTree *syntaxTree, const BFIR *bfcode, size_t n,
+    LexType lexType, Array **section);
+const BFIR *parseIOExpr(BFSyntaxTree *syntaxTree, const BFIR *bfcode,
+    Array **section);
+const BFIR *parseBasicExpr(BFSyntaxTree *syntaxTree, const BFIR *bfcode,
+    Array **section);
+const BFIR *parseExpr(BFSyntaxTree *syntaxTree, const BFIR *bfcode,
+    Array **section);
+const BFIR *parseExprs(BFSyntaxTree *syntaxTree, const BFIR *bfcode,
+    Array **section);
+const BFIR *parseSection(BFSyntaxTree *syntaxTree, const BFIR *bfcode,
+    Array **section);
 
-BFCodeLex *
-pushEmptyBFCodeSequence(BFSyntaxTree *syntaxTree)
-{
-    BFCodeLex *ret;
-
-    /* push BF code sequence descriptor */
-    if (!tryPushVLArray(&syntaxTree->raw, NULL, sizeof(BFCodeLex)))
-        goto error1;
-    ret = (BFCodeLex *)peekVLArray(syntaxTree->raw);
-    /* setup BF code sequence descriptor */
-    *ret = (BFCodeLex) {
-        .count = 0,
-        .lexType = LexType_Empty,
-        .isSection = 0,
-        .sequence.bfCodeIndex = 0,
-    };
-    return ret;
-error1:;
-    return NULL;
-}
-
-BFCodeLex *
+int
 pushBFCodeSequence(BFSyntaxTree *syntaxTree, const BFIR *bfcode, size_t n,
-    LexType lexType)
+    LexType lexType, Array **section)
 {
-    BFCodeLex *nextSequence;
+    size_t bfcodeIndex;
+    size_t nextSequenceIndex;
 
     /* push BF code sequence descriptor */
     if (!tryPushVLArray(&syntaxTree->raw, NULL, sizeof(BFCodeLex)))
         goto error1;
-    nextSequence = (BFCodeLex *)peekVLArray(syntaxTree->raw);
+    nextSequenceIndex = lastIndexVLArray(syntaxTree->raw);
     /* push bfcode */
     if (!tryPushVLArray(&syntaxTree->raw, bfcode, sizeof(BFIR) * n))
         goto error1;
     /* setup BF code sequence descriptor */
-    *nextSequence = (BFCodeLex) {
+    bfcodeIndex = lastIndexVLArray(syntaxTree->raw);
+    *((BFCodeLex *)getElementVLArray(syntaxTree->raw, nextSequenceIndex))
+        = (BFCodeLex) {
         .count = n,
         .isSection = 0,
-        .sequence.bfCode = (const BFIR *)peekVLArray(syntaxTree->raw),
+        .children.sequence.bfCodeIndex = bfcodeIndex,
     };
-    return nextSequence;
+    if (section) {
+        if (!tryPushArray(section, &nextSequenceIndex))
+            goto error1;
+    }
+    return 0;
 error1:;
-    return NULL;
+    return 1;
+}
+
+int
+pushBFSection(BFSyntaxTree *syntaxTree, Array **section)
+{
+    size_t nextSectionIndex;
+
+    /* push section descriptor */
+    if (!tryPushVLArray(&syntaxTree->raw, NULL, sizeof(BFCodeLex)))
+        goto error1;
+    nextSectionIndex = lastIndexVLArray(syntaxTree->raw);
+    /* initialize section descriptor */
+    *((BFCodeLex *)getElementVLArray(syntaxTree->raw, nextSectionIndex))
+        = (BFCodeLex) {
+        .count = 0, .lexType = LexType_Branch,
+        .isSection = 1,
+        .children.section.seqIndex = 0,
+    };
+    if (section) {
+        if (!tryPushArray(section, &nextSectionIndex))
+            goto error1;
+    }
+    return 0;
+error1:;
+    return 1;
 }
 
 const BFIR *
@@ -72,9 +95,7 @@ parseIOExpr(BFSyntaxTree *syntaxTree, const BFIR *bfcode, Array **section)
         /* no IO exprs */
         return bfcode;
     }
-    if (!pushBFCodeSequence(syntaxTree, bfcode, i, LexType_IO))
-        goto error1;
-    if (!tryPushArray(section, (BFCodeLex *)peekVLArray(syntaxTree->raw)))
+    if (pushBFCodeSequence(syntaxTree, bfcode, i, LexType_IO, section))
         goto error1;
     return bfcode + i;
 error1:;
@@ -96,9 +117,7 @@ parseBasicExpr(BFSyntaxTree *syntaxTree, const BFIR *bfcode, Array **section)
         /* no basic exprs */
         return bfcode;
     }
-    if (!pushBFCodeSequence(syntaxTree, bfcode, i, LexType_Basic))
-        goto error1;
-    if (!tryPushArray(section, (BFCodeLex *)peekVLArray(syntaxTree->raw)))
+    if (pushBFCodeSequence(syntaxTree, bfcode, i, LexType_Basic, section))
         goto error1;
     return bfcode + i;
 error1:;
@@ -142,20 +161,20 @@ parseSection(BFSyntaxTree *syntaxTree, const BFIR *bfcode, Array **section)
 {
     const BFIR *ret;
     size_t childrenCount;
-    int isNewSubSectionArray;
-    BFCodeLex *thisSection;
-    Array *newSubSection;
+    int thisSectionChildrenIsArray;
+    Array *thisSectionChildren;
+    size_t thisSectionIndex;
 
-    isNewSubSectionArray = 1;
     if (bfcode->keyword != BFKeyword_setLabel)
         return bfcode;
-    if (!tryPushVLArray(&syntaxTree->raw, NULL, sizeof(BFCodeLex)))
+    if (pushBFSection(syntaxTree, section))
         goto error1;
-    thisSection = (BFCodeLex *)peekVLArray(syntaxTree->raw);
-    newSubSection = newArray(-1, -1, sizeof(BFCodeLex *));
-    if (!newSubSection)
+    thisSectionIndex = lastIndexVLArray(syntaxTree->raw);
+    thisSectionChildrenIsArray = 1;
+    thisSectionChildren = newArray(-1, -1, sizeof(BFCodeLex *));
+    if (!thisSectionChildren)
         goto error1;
-    ret = parseExprs(syntaxTree, bfcode + 1, &newSubSection);
+    ret = parseExprs(syntaxTree, bfcode + 1, &thisSectionChildren);
     if (!ret)
         goto error2;
     /* detect empty brackets [] */
@@ -167,25 +186,26 @@ parseSection(BFSyntaxTree *syntaxTree, const BFIR *bfcode, Array **section)
         // return ret;
     }
     /* brackets are closed forming a section */
-    childrenCount = newSubSection->count;
-    isNewSubSectionArray = 0;
-    arrayToRaw(newSubSection, -1);
-    if (!tryPushVLArray(&syntaxTree->raw, newSubSection,
-        sizeof(BFCodeLex) * childrenCount)) {
+    childrenCount = thisSectionChildren->count;
+    thisSectionChildrenIsArray = 0;
+    arrayToRaw(thisSectionChildren, -1);
+    if (!tryPushVLArray(&syntaxTree->raw, thisSectionChildren,
+        sizeof(size_t) * childrenCount)) {
         goto error2;
     }
-    *thisSection = (BFCodeLex) {
+    *((BFCodeLex *)getElementVLArray(syntaxTree->raw, thisSectionIndex))
+        = (BFCodeLex) {
         .isSection = 1,
         .count = childrenCount,
-        .section.seq = (const BFCodeLex *)peekVLArray(syntaxTree->raw),
+        .children.section.seqIndex = lastIndexVLArray(syntaxTree->raw),
     };
-    free(newSubSection);
+    free(thisSectionChildren);
     return ret + 1;
 error2:;
-    if (isNewSubSectionArray)
-        deleteArray(newSubSection);
+    if (thisSectionChildrenIsArray)
+        deleteArray(thisSectionChildren);
     else
-        free(newSubSection);
+        free(thisSectionChildren);
 error1:;
     return NULL;
 }
@@ -195,6 +215,73 @@ deleteBFSyntaxTree(BFSyntaxTree *tree)
 {
     deleteVLArray(tree->raw);
     free(tree);
+}
+
+int
+printBFSyntaxTreeWhitespace(VLArray **str, size_t depth)
+{
+    char tmp[depth + 1];
+
+    memset(tmp, '\t', depth);
+    tmp[depth] = '\0';
+    return !tryPushVLArray(str, tmp, sizeof(tmp));
+}
+
+int
+printBFSyntaxTreeRecurse(const BFSyntaxTree *tree, const BFCodeLex *node,
+    VLArray **str, size_t depth)
+{
+    const size_t *subNodes;
+    const BFCodeLex *subNode;
+    const BFIR *ir;
+
+    if (node->isSection) {
+        /* RECURSIVE CASE */
+        subNodes = (const size_t *)getElementVLArray(tree->raw,
+            node->children.section.seqIndex);
+        for (size_t i = 0; i < node->count; i++) {
+            subNode = (const BFCodeLex *)getElementVLArray(tree->raw,
+                subNodes[i]);
+            if (printBFSyntaxTreeRecurse(tree, subNode, str, depth + 1))
+                return 1;
+        }
+    } else {
+        /* BASE CASE */
+        ir = (const BFIR *)getElementVLArray(tree->raw,
+            node->children.sequence.bfCodeIndex);
+        if (printBFSyntaxTreeWhitespace(str, depth))
+            return 1;
+        for (size_t i = 0; i < node->count; i++) {
+            if (pushBFIRString(str, ir + i))
+                return 1;
+        }
+        static const char *newlineStr = "\n";
+        if (!tryPushVLArray(str, newlineStr, 2))
+            return 1;
+    }
+    return 0;
+}
+
+char *
+printBFSyntaxTree(const BFSyntaxTree *tree)
+{
+    char *ret;
+    VLArray *tmp;
+
+    tmp = newVLArray(-1, -1, -1);
+    if (!tmp)
+        goto error1;
+    if (printBFSyntaxTreeRecurse(tree, tree->start, &tmp, 0))
+        goto error2;
+    ret = toStringVLArray(tmp);
+    if (!ret)
+        goto error2;
+    deleteVLArray(tmp);
+    return ret;
+error2:;
+    deleteVLArray(tmp);
+error1:;
+    return NULL;
 }
 
 BFSyntaxTree *
@@ -214,11 +301,6 @@ parseBF(const Array *bfir)
     if (!parseSection(ret, (const BFIR *)getElementArray(bfir, 0), NULL))
         goto error3;
     ret->start = (const BFCodeLex *)getElementVLArray(ret->raw, 0);
-//    start = pushBFCodeSection(ret, (const BFIR *)getElementArray(bfir, 0),
-//        bfir->count, 0, NULL);
-    // if (!start)
-    //     goto error3;
-    // ret->start = start;
     return ret;
 error3:;
     free(ret);

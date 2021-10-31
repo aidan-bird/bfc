@@ -1,7 +1,9 @@
 #include <stdlib.h>
+#include <string.h>
 
 #include "./bfc_ir.h"
 #include "../alib/src/array.h"
+#include "../alib/src/vlarray.h"
 
 static const BFKeyword _charKeywordMap[] =
 {
@@ -15,7 +17,20 @@ static const BFKeyword _charKeywordMap[] =
     [']'] = BFKeyword_jump,
 };
 
+static const char _keywordCharMap[] =
+{
+    [BFKeyword_up]        = '>',
+    [BFKeyword_down]      = '<',
+    [BFKeyword_inc]       = '+',
+    [BFKeyword_dec]       = '-',
+    [BFKeyword_print]     = '.',
+    [BFKeyword_read]      = ',',
+    [BFKeyword_setLabel]  = '[',
+    [BFKeyword_jump]      = ']',
+};
+
 const BFKeyword *charKeywordMap = _charKeywordMap;
+const char *keywordCharMap = _keywordCharMap;
 
 /*
  * REQUIRES
@@ -178,3 +193,17 @@ isBranchBFKeyword(BFKeyword keyword)
             return 0;
     }
 }
+
+int
+pushBFIRString(VLArray **str, const BFIR *restrict bfir)
+{
+    char textRep;
+    char buf[bfir->count + 1];
+
+    textRep = _keywordCharMap[bfir->keyword];
+    memset(buf, textRep, bfir->count);
+    buf[bfir->count] = '\0';
+    return !tryPushVLArray(str, buf, sizeof(buf));
+}
+
+
