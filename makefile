@@ -30,4 +30,4 @@ debug: $(OBJ) $(ALIB_OBJ)
 .PHONY: clean
 clean:
 	rm -rf $(OBJ)
-	rm -f testing
+	rm -f testing bfc
