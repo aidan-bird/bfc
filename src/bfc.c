@@ -26,8 +26,8 @@ main(int argc, char **argv)
     removeNonBFKeywordsInplace(src);
     bfir = srcToBFIR(src);
     tree = parseBF(bfir);
-    str = printBFSyntaxTree(tree);
-    puts(str);
+    // str = printBFSyntaxTree(tree);
+    // puts(str);
     trans = newTranslator(ISA_x86_64, Platform_linux, tree);
     translate(trans);
     asmCode = translateToString(trans, NULL);

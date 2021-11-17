@@ -8,6 +8,7 @@
 #include "../alib/src/utils.h"
 
 #define PUSH_BUF_SIZE 32
+#define TAPE_LENGTH 30000
 
 #define linux_x86_64_pointer_reg rbx
 
@@ -19,7 +20,7 @@ static int linux_x86_64_emitIO(Translator *translator, const BFIR *bfir);
 static int linux_x86_64_emitSection(Translator *translator, int sectionID);
 static int linux_x86_64_emitExit(Translator *translator, const BFIR *bfir);
 static int linux_x86_64_emitStart(Translator *translator, const BFIR *bfir);
-static int linux_x86_64_emitJump(Translator *translator, const BFIR *bfir);
+static int linux_x86_64_emitJump(Translator *translator, int sectionID);
 static int notImplementedYet();
 
 static int
@@ -112,6 +113,12 @@ __translateRecursive(Translator *translator, const BFCodeLex *node,
             if (__translateRecursive(translator, subNode, depth + 1))
                 return 1;
         }
+    } else if (node->lexType == LexType_Branch) {
+        /* BASE CASE */
+        /* emit jump */
+        translator->spec->emitJump(translator,
+        ((BFCodeLex *)getElementVLArray(translator->syntaxTree->raw,
+            node->children.branch.sectIndex))->children.section.sectionID);
     } else {
         /* BASE CASE */
         ir = (const BFIR *)getElementVLArray(translator->syntaxTree->raw,
@@ -125,8 +132,6 @@ __translateRecursive(Translator *translator, const BFCodeLex *node,
             else
                 return 1;
         }
-        /* emit jump */
-        // translator->platform.emitJump(translator, NULL);
     }
 }
 
@@ -152,14 +157,14 @@ static int
 linux_x86_64_emitBasic(Translator *translator, const BFIR *bfir)
 {
     static const char *linux_x86_64_emitBasicStrsSingle[] = {
-        [BFKeyword_up]   = SPACES "dec " XSTR(linux_x86_64_pointer_reg),
-        [BFKeyword_down] = SPACES "inc " XSTR(linux_x86_64_pointer_reg),
-        [BFKeyword_inc]  = SPACES "inc BYTE [" XSTR(linux_x86_64_pointer_reg) "]",
-        [BFKeyword_dec]  = SPACES "dec BYTE [" XSTR(linux_x86_64_pointer_reg) "]",
+        [BFKeyword_up]   = SPACES "inc " XSTR(linux_x86_64_pointer_reg) "\n",
+        [BFKeyword_down] = SPACES "dec " XSTR(linux_x86_64_pointer_reg) "\n",
+        [BFKeyword_inc]  = SPACES "inc BYTE [" XSTR(linux_x86_64_pointer_reg) "] \n",
+        [BFKeyword_dec]  = SPACES "dec BYTE [" XSTR(linux_x86_64_pointer_reg) "] \n",
     };
     static const char *linux_x86_64_emitBasicStrsMulti[] = {
-        [BFKeyword_up]   = SPACES "sub " XSTR(linux_x86_64_pointer_reg),
-        [BFKeyword_down] = SPACES "add " XSTR(linux_x86_64_pointer_reg),
+        [BFKeyword_up]   = SPACES "add " XSTR(linux_x86_64_pointer_reg),
+        [BFKeyword_down] = SPACES "sub " XSTR(linux_x86_64_pointer_reg),
         [BFKeyword_inc]  = SPACES "add BYTE [" XSTR(linux_x86_64_pointer_reg) "]",
         [BFKeyword_dec]  = SPACES "sub BYTE [" XSTR(linux_x86_64_pointer_reg) "]",
     };
@@ -173,13 +178,59 @@ linux_x86_64_emitBasic(Translator *translator, const BFIR *bfir)
 }
 
 static int
+linux_x86_64_emitPrintMulti(Translator *translator, size_t count)
+{
+    static const char printSingleCode[] =
+SPACES "mov rax, 1\n"
+SPACES "mov rdi, 1\n"
+SPACES "mov rsi, " XSTR(linux_x86_64_pointer_reg) "\n"
+SPACES "mov rdx, 1\n"
+SPACES "syscall\n";
+    static const char printMultiCode[] =
+SPACES "mov rax, 1\n"
+SPACES "syscall\n";
+
+    if (stringBuilderPushStr(translator->codeBuf, printSingleCode))
+        return 1;
+    for (size_t i = 0; i < count - 1; i++) {
+        /* TODO make a stringBuilder api that duplicates strings*/
+        if (stringBuilderPushStr(translator->codeBuf, printMultiCode))
+            return 1;
+    }
+    return 0;
+}
+
+static int
+linux_x86_64_emitReadMulti(Translator *translator, size_t count)
+{
+    static const char readSingleCode[] =
+SPACES "xor rax, rax\n"
+SPACES "xor rdi, rdi\n"
+SPACES "mov rsi, rbx\n"
+SPACES "mov rdx, 1\n"
+SPACES "syscall\n";
+    static const char readMultiCode[] =
+SPACES "xor rax, rax\n"
+SPACES "syscall\n";
+
+    if (stringBuilderPushStr(translator->codeBuf, readSingleCode))
+        return 1;
+    for (size_t i = 0; i < count - 1; i++) {
+        /* TODO make a stringBuilder api that duplicates strings*/
+        if (stringBuilderPushStr(translator->codeBuf, readMultiCode))
+            return 1;
+    }
+    return 0;
+}
+
+static int
 linux_x86_64_emitIO(Translator *translator, const BFIR *bfir)
 {
     switch (bfir->keyword) {
         case BFKeyword_print:
-            break;
+            return linux_x86_64_emitPrintMulti(translator, bfir->count);
         case BFKeyword_read:
-            break;
+            return linux_x86_64_emitReadMulti(translator, bfir->count);
         default:
             return 1;
     }
@@ -210,19 +261,25 @@ linux_x86_64_emitStart(Translator *translator, const BFIR *bfir)
     /* configure the program to use either the stack or malloc here */
     /* $rbx is the pointer register */
     static const char *startCode = 
+"section .bss\n"
+SPACES "tape: resb " XSTR(TAPE_LENGTH) "\n"
 "section .text\n"
 SPACES "global _start\n"
 "_start:\n"
 SPACES "mov rbp, rsp\n"
-SPACES "mov rbx, rsp\n";
+SPACES "mov rbx, tape\n";
 
     return stringBuilderPushStr(translator->codeBuf, startCode);
 }
 
 static int
-linux_x86_64_emitJump(Translator *translator, const BFIR *bfir)
+linux_x86_64_emitJump(Translator *translator, int sectionID)
 {
-    return 0;
+    static const char *jumpCode =
+SPACES "cmp BYTE [" XSTR(linux_x86_64_pointer_reg)"], 0\n"
+SPACES "jne";
+
+    return pushInstruction(translator, "%s L%d\n", jumpCode, sectionID);
 }
 
 static int

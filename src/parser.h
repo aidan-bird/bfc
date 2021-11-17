@@ -46,6 +46,7 @@ enum LexType {
     LexType_Basic,
     LexType_IO,
     LexType_Branch,
+    LexType_Section,
     LexType_Empty,
 };
 
@@ -64,6 +65,9 @@ struct BFCodeLex
         struct BFCodeSequence {
             size_t bfCodeIndex;
         } sequence;
+        struct BFCodeBranch {
+            size_t sectIndex;
+        } branch;
     } children;
 };
 

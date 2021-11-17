@@ -32,7 +32,7 @@ struct PlatformSpec
     SectionEmitterFunc emitSection;
     CodeEmitterFunc emitExit;
     CodeEmitterFunc emitStart;
-    CodeEmitterFunc emitJump;
+    SectionEmitterFunc emitJump;
 };
 
 struct Translator
