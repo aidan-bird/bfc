@@ -10,7 +10,7 @@
 
 typedef const BFIR * (*ParsingFunc)(BFSyntaxTree *, const BFIR *,
     Array **section);
-int pushBFSection(BFSyntaxTree *syntaxTree, Array **section);
+int pushBFSection(BFSyntaxTree *syntaxTree, Array **section, int sectionID);
 int pushBFCodeSequence(BFSyntaxTree *syntaxTree, const BFIR *bfcode, size_t n,
     LexType lexType, Array **section);
 const BFIR *parseIOExpr(BFSyntaxTree *syntaxTree, const BFIR *bfcode,
@@ -22,6 +22,8 @@ const BFIR *parseExpr(BFSyntaxTree *syntaxTree, const BFIR *bfcode,
 const BFIR *parseExprs(BFSyntaxTree *syntaxTree, const BFIR *bfcode,
     Array **section);
 const BFIR *parseSection(BFSyntaxTree *syntaxTree, const BFIR *bfcode,
+    Array **section);
+const BFIR *parseAnnonSection(BFSyntaxTree *syntaxTree, const BFIR *bfcode,
     Array **section);
 
 int
@@ -56,21 +58,37 @@ error1:;
 }
 
 int
-pushBFSection(BFSyntaxTree *syntaxTree, Array **section)
+pushBFSection(BFSyntaxTree *syntaxTree, Array **section, int sectionID)
 {
     size_t nextSectionIndex;
-
-    /* push section descriptor */
-    if (!tryPushVLArray(&syntaxTree->raw, NULL, sizeof(BFCodeLex)))
-        goto error1;
-    nextSectionIndex = lastIndexVLArray(syntaxTree->raw);
+    BFCodeLex nextSectionDescriptor;
+    
     /* initialize section descriptor */
-    *((BFCodeLex *)getElementVLArray(syntaxTree->raw, nextSectionIndex))
-        = (BFCodeLex) {
-        .count = 0, .lexType = LexType_Branch,
+    nextSectionDescriptor = (BFCodeLex) {
+        .count = 0,
+        .lexType = LexType_Branch,
         .isSection = 1,
-        .children.section.seqIndex = 0,
+        .children.section = {
+            .seqIndex = 0,
+            .sectionID = sectionID,
+        },
     };
+    /* push section descriptor */
+    if (!tryPushVLArray(&syntaxTree->raw, &nextSectionDescriptor,
+            sizeof(nextSectionDescriptor))) {
+        goto error1;
+    }
+    nextSectionIndex = lastIndexVLArray(syntaxTree->raw);
+    // *((BFCodeLex *)getElementVLArray(syntaxTree->raw, nextSectionIndex))
+    //     = (BFCodeLex) {
+    //     .count = 0,
+    //     .lexType = LexType_Branch,
+    //     .isSection = 1,
+    //     .children.section = {
+    //         .seqIndex = 0,
+    //         .sectionID = sectionID,
+    //     },
+    // };
     if (section) {
         if (!tryPushArray(section, &nextSectionIndex))
             goto error1;
@@ -124,7 +142,7 @@ error1:;
     return NULL;
 }
 
-/* expr := IOExpr || BasicExpr */
+/* expr := IOExpr || BasicExpr || section */
 const BFIR *
 parseExpr(BFSyntaxTree *syntaxTree, const BFIR *bfcode, Array **section)
 {
@@ -150,7 +168,7 @@ parseExprs(BFSyntaxTree *syntaxTree, const BFIR *bfcode, Array **section)
     ret = parseExpr(syntaxTree, bfcode, section);
     if (!ret)
         return NULL;
-    if (ret == bfcode)
+    if (isBF_EOF(ret) || ret == bfcode)
         return ret;
     return parseExprs(syntaxTree, ret, section);
 }
@@ -160,32 +178,39 @@ const BFIR *
 parseSection(BFSyntaxTree *syntaxTree, const BFIR *bfcode, Array **section)
 {
     const BFIR *ret;
+
+    if (bfcode->keyword != BFKeyword_setLabel)
+        return bfcode;
+    ret = parseAnnonSection(syntaxTree, bfcode + 1, section);
+    /* check if brackets are matched */
+    if (ret->keyword != BFKeyword_jump) {
+        fputs("Warning: unmatched [ bracket", stderr);
+        return NULL;
+    }
+    return ret + 1;
+}
+
+const BFIR *
+parseAnnonSection(BFSyntaxTree *syntaxTree, const BFIR *bfcode,
+    Array **section)
+{
+    const BFIR *ret;
     size_t childrenCount;
     int thisSectionChildrenIsArray;
     Array *thisSectionChildren;
     size_t thisSectionIndex;
 
-    if (bfcode->keyword != BFKeyword_setLabel)
-        return bfcode;
-    if (pushBFSection(syntaxTree, section))
+    if (pushBFSection(syntaxTree, section, syntaxTree->nextSectionID))
         goto error1;
+    syntaxTree->nextSectionID++;
     thisSectionIndex = lastIndexVLArray(syntaxTree->raw);
     thisSectionChildrenIsArray = 1;
     thisSectionChildren = newArray(-1, -1, sizeof(BFCodeLex *));
     if (!thisSectionChildren)
         goto error1;
-    ret = parseExprs(syntaxTree, bfcode + 1, &thisSectionChildren);
+    ret = parseExprs(syntaxTree, bfcode, &thisSectionChildren);
     if (!ret)
         goto error2;
-    /* detect empty brackets [] */
-    // if (ret == bfcode + 1)
-    //     return bfcode;
-    if (ret->keyword != BFKeyword_jump) {
-        fputs("Warning: unmatched [ bracket", stderr);
-        goto error2;
-        // return ret;
-    }
-    /* brackets are closed forming a section */
     syntaxTree->nodes++;
     childrenCount = thisSectionChildren->count;
     thisSectionChildrenIsArray = 0;
@@ -194,14 +219,12 @@ parseSection(BFSyntaxTree *syntaxTree, const BFIR *bfcode, Array **section)
         sizeof(size_t) * childrenCount)) {
         goto error2;
     }
-    *((BFCodeLex *)getElementVLArray(syntaxTree->raw, thisSectionIndex))
-        = (BFCodeLex) {
-        .isSection = 1,
-        .count = childrenCount,
-        .children.section.seqIndex = lastIndexVLArray(syntaxTree->raw),
-    };
+    ((BFCodeLex *)getElementVLArray(syntaxTree->raw, thisSectionIndex))->count
+        = childrenCount;
+    ((BFCodeLex *)getElementVLArray(syntaxTree->raw, thisSectionIndex))
+        ->children.section.seqIndex = lastIndexVLArray(syntaxTree->raw);
     free(thisSectionChildren);
-    return ret + 1;
+    return ret;
 error2:;
     if (thisSectionChildrenIsArray)
         deleteArray(thisSectionChildren);
@@ -285,11 +308,6 @@ error1:;
     return NULL;
 }
 
-int
-parseRoot(BFSyntaxTree *syntaxTree, const BFIR *bfcode, Array **section)
-{
-}
-
 BFSyntaxTree *
 parseBF(const Array *bfir)
 {
@@ -305,12 +323,8 @@ parseBF(const Array *bfir)
         goto error2;
     ret->raw = raw;
     ret->nodes = 0;
-
-    // if (!parseSection(ret, (const BFIR *)getElementArray(bfir, 0), NULL))
-    //     goto error3;
-    if (!parseRoot(ret, (const BFIR *)getElementArray(bfir, 0), NULL))
-        goto error3;
-
+    ret->nextSectionID = START_SECTION_ID;
+    parseAnnonSection(ret, (const BFIR *)getElementArray(bfir, 0), NULL);
     ret->start = (const BFCodeLex *)getElementVLArray(ret->raw, 0);
     return ret;
 error3:;

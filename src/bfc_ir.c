@@ -4,9 +4,9 @@
 #include "./bfc_ir.h"
 #include "../alib/src/array.h"
 #include "../alib/src/vlarray.h"
+#include "../alib/src/utils.h"
 
-static const BFKeyword _charKeywordMap[] =
-{
+static const BFKeyword _charKeywordMap[] = {
     ['>'] = BFKeyword_up,
     ['<'] = BFKeyword_down,
     ['+'] = BFKeyword_inc,
@@ -17,8 +17,7 @@ static const BFKeyword _charKeywordMap[] =
     [']'] = BFKeyword_jump,
 };
 
-static const char _keywordCharMap[] =
-{
+static const char _keywordCharMap[] = {
     [BFKeyword_up]        = '>',
     [BFKeyword_down]      = '<',
     [BFKeyword_inc]       = '+',
@@ -29,8 +28,31 @@ static const char _keywordCharMap[] =
     [BFKeyword_jump]      = ']',
 };
 
+static const BFKeyword _keywords[] = {
+    BFKeyword_up, BFKeyword_down, BFKeyword_inc, BFKeyword_dec,
+    BFKeyword_print, BFKeyword_read, BFKeyword_setLabel, BFKeyword_jump,
+    BFKeyword_eof
+};
+
+static size_t _maxBfKeyword;
+static size_t _bfKeywordCount;
+
 const BFKeyword *charKeywordMap = _charKeywordMap;
 const char *keywordCharMap = _keywordCharMap;
+const BFKeyword *bfKeywords = _keywords;
+const size_t *maxBfKeyword;
+const size_t *bfKeywordCount;
+
+void
+initBFCIR()
+{
+    maxBfKeyword = &_maxBfKeyword;
+    bfKeywordCount = &_bfKeywordCount;
+    _maxBfKeyword = 0;
+    for (size_t i = 0; i < LEN(_keywords); i++)
+        _maxBfKeyword = MAX(_maxBfKeyword, _keywords[i]);
+    _bfKeywordCount = LEN(_keywords);
+}
 
 /*
  * REQUIRES

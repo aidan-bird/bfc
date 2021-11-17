@@ -5,6 +5,9 @@
 #include "../alib/src/array.h"
 #include "../alib/src/vlarray.h"
 
+#define ROOT_SECTION_ID 0
+#define START_SECTION_ID 0
+
 /*
  * BF GRAMMAR
  * 
@@ -55,6 +58,7 @@ struct BFCodeLex
     size_t count;
     union {
         struct BFCodeSection {
+            int sectionID;
             size_t seqIndex;
         } section;
         struct BFCodeSequence {
@@ -66,6 +70,7 @@ struct BFCodeLex
 struct BFSyntaxTree
 {
     size_t nodes;
+    int nextSectionID;
     VLArray *raw;
     const BFCodeLex *start;
 };

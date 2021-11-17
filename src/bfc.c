@@ -21,34 +21,18 @@ main(int argc, char **argv)
     BFSyntaxTree *tree;
     Translator *trans;
 
-
-    StringBuilder *sb;
-    sb = newStringBuilder();
-    char c = 'a';
-    size_t len = 0;
-    stringBuilderPushStr(sb, "foobar");
-    stringBuilderPushChar(sb, c);
-    stringBuilderPrintInplace(sb);
-    stringBuilderPushStr(sb, "baz");
-    char *fff = stringBuilderToString(sb, &len);
-    puts(fff);
-    deleteStringBuilder(sb);
-
-
-
+    initBFCIR();
     src = readTextFile(stdin, NULL);
     removeNonBFKeywordsInplace(src);
     bfir = srcToBFIR(src);
     tree = parseBF(bfir);
-    trans = newTranslator(ISA_ia32, Platform_linux, tree);
-    asmCode = translate(trans);
-
+    str = printBFSyntaxTree(tree);
+    puts(str);
+    trans = newTranslator(ISA_x86_64, Platform_linux, tree);
+    translate(trans);
+    asmCode = translateToString(trans, NULL);
     if (asmCode)
         puts(asmCode);
-
-    // str = printBFSyntaxTree(tree);
-    // puts(str);
-
     if (str)
         free(str);
     deleteBFSyntaxTree(tree);

@@ -1,13 +1,22 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdarg.h>
 
 #include "./translate.h"
-
+#include "./bfc_ir.h"
 #include "../alib/src/vlarray.h"
+#include "../alib/src/utils.h"
+
+#define PUSH_BUF_SIZE 32
+
+#define linux_x86_64_pointer_reg rbx
+
+#define SPACES "    "
+#define SPACES_LEN (sizeof(SPACES) - 1)
 
 static int linux_x86_64_emitBasic(Translator *translator, const BFIR *bfir);
 static int linux_x86_64_emitIO(Translator *translator, const BFIR *bfir);
-static int linux_x86_64_emitSection(Translator *translator, const BFIR *bfir);
+static int linux_x86_64_emitSection(Translator *translator, int sectionID);
 static int linux_x86_64_emitExit(Translator *translator, const BFIR *bfir);
 static int linux_x86_64_emitStart(Translator *translator, const BFIR *bfir);
 static int linux_x86_64_emitJump(Translator *translator, const BFIR *bfir);
@@ -30,6 +39,7 @@ static const PlatformSpec linuxPlatformTab[] = {
     /* XXX not implemented yet */
     [ISA_ia32] = {
         .name = "linux_ia32",
+        // .pointerReg = "esi",
         .emitBasic = notImplementedYet,
         .emitIO = notImplementedYet,
         .emitSection = notImplementedYet,
@@ -39,15 +49,7 @@ static const PlatformSpec linuxPlatformTab[] = {
     },
 };
 
-static int
-notImplementedYet()
-{
-    puts("Not Implemented Yet!!");
-    exit(1);
-    return 0;
-}
-
-static const PlatformSpec *platformTab[] = {
+static const PlatformSpec *platformTabs[] = {
     [Platform_linux] = linuxPlatformTab,
 };
 
@@ -63,8 +65,9 @@ newTranslator(ISA isa, PlatformName platform, const BFSyntaxTree *syntaxTree)
     if (!ret->codeBuf)
         goto error2;
     ret->syntaxTree = syntaxTree;
-    ret->platform = platformTab[platform][isa];
     ret->nodeIndex = 0;
+    ret->spec = platformTabs[platform] + isa;
+    ret->isTranslated = 0;
     return ret;
 error2:;
     free(ret);
@@ -72,13 +75,20 @@ error1:;
     return NULL;
 }
 
-char *
+int
 translate(Translator *translator)
 {
-    translator->platform.emitStart(translator, NULL);
-    __translateRecursive(translator, translator->syntaxTree->start, 0);
-    translator->platform.emitExit(translator, NULL);
-    return NULL;
+    translator->isTranslated = !(translator->spec->emitStart(translator, NULL)
+        || __translateRecursive(translator, translator->syntaxTree->start, 0)
+        || translator->spec->emitExit(translator, NULL));
+    return translator->isTranslated;
+}
+
+char *
+translateToString(Translator *translator, size_t *outLen)
+{
+    return !translator->isTranslated ? NULL :
+        stringBuilderToString(translator->codeBuf, outLen);
 }
 
 static int
@@ -90,6 +100,9 @@ __translateRecursive(Translator *translator, const BFCodeLex *node,
     const BFIR *ir;
 
     if (node->isSection) {
+        /* emit section label */
+        translator->spec->emitSection(translator,
+            node->children.section.sectionID);
         /* RECURSIVE CASE */
         subNodes = (const size_t *)getElementVLArray(
             translator->syntaxTree->raw, node->children.section.seqIndex);
@@ -101,26 +114,72 @@ __translateRecursive(Translator *translator, const BFCodeLex *node,
         }
     } else {
         /* BASE CASE */
-        ir = (const BFIR *)getElementVLArray(
-            translator->syntaxTree->raw, node->children.sequence.bfCodeIndex);
+        ir = (const BFIR *)getElementVLArray(translator->syntaxTree->raw,
+            node->children.sequence.bfCodeIndex);
         for (size_t i = 0; i < node->count; i++) {
-            if (isBasicBFKeyword(ir[i].keyword)) {
-                translator->platform.emitBasic(translator, ir + i);
-            } else if (isIOBFKeyword(ir[i].keyword)) {
-                translator->platform.emitIO(translator, ir + i);
-            } else {
+            /* check for errors */
+            if (isBasicBFKeyword(ir[i].keyword))
+                translator->spec->emitBasic(translator, ir + i);
+            else if (isIOBFKeyword(ir[i].keyword))
+                translator->spec->emitIO(translator, ir + i);
+            else
                 return 1;
-            }
         }
         /* emit jump */
-        translator->platform.emitJump(translator, NULL);
+        // translator->platform.emitJump(translator, NULL);
     }
+}
+
+static int
+pushInstruction(Translator *translator, const char *fmt, ...)
+{
+    va_list ap;
+    static char buf[PUSH_BUF_SIZE];
+
+    va_start(ap, fmt);
+    if (!(vsprintf(buf, fmt, ap)))
+        goto error1;
+    if (stringBuilderPushStr(translator->codeBuf, buf))
+        goto error1;
+    va_end(ap);
+    return 0;
+error1:;
+    va_end(ap);
+    return 1;
 }
 
 static int
 linux_x86_64_emitBasic(Translator *translator, const BFIR *bfir)
 {
+    static const char *linux_x86_64_emitBasicStrsSingle[] = {
+        [BFKeyword_up]   = SPACES "dec " XSTR(linux_x86_64_pointer_reg),
+        [BFKeyword_down] = SPACES "inc " XSTR(linux_x86_64_pointer_reg),
+        [BFKeyword_inc]  = SPACES "inc BYTE [" XSTR(linux_x86_64_pointer_reg) "]",
+        [BFKeyword_dec]  = SPACES "dec BYTE [" XSTR(linux_x86_64_pointer_reg) "]",
+    };
+    static const char *linux_x86_64_emitBasicStrsMulti[] = {
+        [BFKeyword_up]   = SPACES "sub " XSTR(linux_x86_64_pointer_reg),
+        [BFKeyword_down] = SPACES "add " XSTR(linux_x86_64_pointer_reg),
+        [BFKeyword_inc]  = SPACES "add BYTE [" XSTR(linux_x86_64_pointer_reg) "]",
+        [BFKeyword_dec]  = SPACES "sub BYTE [" XSTR(linux_x86_64_pointer_reg) "]",
+    };
+
+    if (bfir->count == 1)
+        return stringBuilderPushStr(translator->codeBuf,
+            linux_x86_64_emitBasicStrsSingle[bfir->keyword]);
+    return pushInstruction(translator, "%s, %d\n",
+        linux_x86_64_emitBasicStrsMulti[bfir->keyword], bfir->count);
+    return 0;
+}
+
+static int
+linux_x86_64_emitIO(Translator *translator, const BFIR *bfir)
+{
     switch (bfir->keyword) {
+        case BFKeyword_print:
+            break;
+        case BFKeyword_read:
+            break;
         default:
             return 1;
     }
@@ -128,13 +187,9 @@ linux_x86_64_emitBasic(Translator *translator, const BFIR *bfir)
 }
 
 static int
-linux_x86_64_emitIO(Translator *translator, const BFIR *bfir)
+linux_x86_64_emitSection(Translator *translator, int sectionID)
 {
-}
-
-static int
-linux_x86_64_emitSection(Translator *translator, const BFIR *bfir)
-{
+    return pushInstruction(translator, "L%d:\n", sectionID);
 }
 
 static int
@@ -142,8 +197,9 @@ linux_x86_64_emitExit(Translator *translator, const BFIR *bfir)
 {
     static const char exitCode[] = 
 "end:\n"
-"    mov eax, 1\n"
-"    int 0x80";
+SPACES "mov rax, 60\n"
+SPACES "xor rdi, rdi\n"
+SPACES "syscall";
 
     return stringBuilderPushStr(translator->codeBuf, exitCode);
 }
@@ -151,13 +207,14 @@ linux_x86_64_emitExit(Translator *translator, const BFIR *bfir)
 static int
 linux_x86_64_emitStart(Translator *translator, const BFIR *bfir)
 {
+    /* configure the program to use either the stack or malloc here */
+    /* $rbx is the pointer register */
     static const char *startCode = 
-"section .data\n"
 "section .text\n"
-"    global _start\n"
+SPACES "global _start\n"
 "_start:\n"
-"    push ebp\n"
-"    mov ebp, esp\n";
+SPACES "mov rbp, rsp\n"
+SPACES "mov rbx, rsp\n";
 
     return stringBuilderPushStr(translator->codeBuf, startCode);
 }
@@ -165,5 +222,13 @@ linux_x86_64_emitStart(Translator *translator, const BFIR *bfir)
 static int
 linux_x86_64_emitJump(Translator *translator, const BFIR *bfir)
 {
+    return 0;
+}
+
+static int
+notImplementedYet()
+{
+    puts("Not Implemented Yet!!");
+    exit(1);
     return 0;
 }
