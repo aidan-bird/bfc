@@ -3,7 +3,7 @@
 BF is a minimal esoteric programming language with 8 keywords; all non-keywords are ignored.
 A BF program consists of a strip of tape containing cells and a read/write head.
 Each keyword performs a single operation on the head, and the program state is stored in the cells.
-See the [wiki page](esolangs.org/wiki/Brainfuck) for more details.
+See the [wiki page](https://esolangs.org/wiki/Brainfuck) for more details.
 
 # Project Details
 
