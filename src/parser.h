@@ -61,11 +61,13 @@ struct BFCodeLex
         struct BFCodeSection {
             int sectionID;
             size_t seqIndex;
+            size_t endIndex;
         } section;
         struct BFCodeSequence {
             size_t bfCodeIndex;
         } sequence;
         struct BFCodeBranch {
+            int sectionID;
             size_t sectIndex;
         } branch;
     } children;
@@ -82,6 +84,7 @@ struct BFSyntaxTree
 BFSyntaxTree *parseBF(const Array *BFIR);
 void deleteBFSyntaxTree(BFSyntaxTree *tree);
 char *printBFSyntaxTree(const BFSyntaxTree *tree);
+void deleteBFSyntaxTree(BFSyntaxTree *tree);
 
 #endif
 

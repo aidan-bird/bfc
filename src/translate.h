@@ -20,7 +20,8 @@ typedef enum ISA ISA;
 typedef enum PlatformName PlatformName;
 typedef struct Translator Translator;
 typedef int (*CodeEmitterFunc)(Translator *translator, const BFIR *bfir);
-typedef int (*SectionEmitterFunc)(Translator *translator, int sectionID);
+typedef int (*SectionEmitterFunc)(Translator *translator, 
+    const BFCodeLex *node);
 typedef struct PlatformSpec PlatformSpec;
 typedef struct CodeEmitterConfig CodeEmitterConfig;
 
@@ -46,9 +47,8 @@ struct Translator
 
 Translator * newTranslator(ISA isa, PlatformName platform,
     const BFSyntaxTree *syntaxTree);
-
 char *translateToString(Translator *translator, size_t *outLen);
-
 int translate(Translator *translator);
+void deleteTranslator(Translator *translator);
 
 #endif

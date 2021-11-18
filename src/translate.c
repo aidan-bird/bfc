@@ -7,7 +7,7 @@
 #include "../alib/src/vlarray.h"
 #include "../alib/src/utils.h"
 
-#define PUSH_BUF_SIZE 32
+#define PUSH_BUF_SIZE 128
 #define TAPE_LENGTH 30000
 
 #define linux_x86_64_pointer_reg rbx
@@ -17,10 +17,12 @@
 
 static int linux_x86_64_emitBasic(Translator *translator, const BFIR *bfir);
 static int linux_x86_64_emitIO(Translator *translator, const BFIR *bfir);
-static int linux_x86_64_emitSection(Translator *translator, int sectionID);
+static int linux_x86_64_emitSection(Translator *translator,
+    const BFCodeLex *node);
 static int linux_x86_64_emitExit(Translator *translator, const BFIR *bfir);
 static int linux_x86_64_emitStart(Translator *translator, const BFIR *bfir);
-static int linux_x86_64_emitJump(Translator *translator, int sectionID);
+static int linux_x86_64_emitJump(Translator *translator,
+    const BFCodeLex *node);
 static int notImplementedYet();
 
 static int
@@ -54,6 +56,12 @@ static const PlatformSpec *platformTabs[] = {
     [Platform_linux] = linuxPlatformTab,
 };
 
+void
+deleteTranslator(Translator *translator)
+{
+    deleteStringBuilder(translator->codeBuf);
+}
+
 Translator *
 newTranslator(ISA isa, PlatformName platform, const BFSyntaxTree *syntaxTree)
 {
@@ -82,7 +90,7 @@ translate(Translator *translator)
     translator->isTranslated = !(translator->spec->emitStart(translator, NULL)
         || __translateRecursive(translator, translator->syntaxTree->start, 0)
         || translator->spec->emitExit(translator, NULL));
-    return translator->isTranslated;
+    return !translator->isTranslated;
 }
 
 char *
@@ -102,8 +110,7 @@ __translateRecursive(Translator *translator, const BFCodeLex *node,
 
     if (node->isSection) {
         /* emit section label */
-        translator->spec->emitSection(translator,
-            node->children.section.sectionID);
+        translator->spec->emitSection(translator, node);
         /* RECURSIVE CASE */
         subNodes = (const size_t *)getElementVLArray(
             translator->syntaxTree->raw, node->children.section.seqIndex);
@@ -116,9 +123,7 @@ __translateRecursive(Translator *translator, const BFCodeLex *node,
     } else if (node->lexType == LexType_Branch) {
         /* BASE CASE */
         /* emit jump */
-        translator->spec->emitJump(translator,
-        ((BFCodeLex *)getElementVLArray(translator->syntaxTree->raw,
-            node->children.branch.sectIndex))->children.section.sectionID);
+        translator->spec->emitJump(translator, node);
     } else {
         /* BASE CASE */
         ir = (const BFIR *)getElementVLArray(translator->syntaxTree->raw,
@@ -206,7 +211,7 @@ linux_x86_64_emitReadMulti(Translator *translator, size_t count)
     static const char readSingleCode[] =
 SPACES "xor rax, rax\n"
 SPACES "xor rdi, rdi\n"
-SPACES "mov rsi, rbx\n"
+SPACES "mov rsi, " XSTR(linux_x86_64_pointer_reg) "\n"
 SPACES "mov rdx, 1\n"
 SPACES "syscall\n";
     static const char readMultiCode[] =
@@ -238,9 +243,20 @@ linux_x86_64_emitIO(Translator *translator, const BFIR *bfir)
 }
 
 static int
-linux_x86_64_emitSection(Translator *translator, int sectionID)
+linux_x86_64_emitSection(Translator *translator, const BFCodeLex *sectionNode)
 {
-    return pushInstruction(translator, "L%d:\n", sectionID);
+    static const char *sectionCode =
+SPACES "cmp BYTE [" XSTR(linux_x86_64_pointer_reg)"], 0\n"
+SPACES "je";
+
+    if (sectionNode->children.section.sectionID == ROOT_SECTION_ID)
+        return stringBuilderPushStr(translator->codeBuf, "L0:\n");
+    return pushInstruction(translator, "L%d:\n",
+        sectionNode->children.section.sectionID)
+    || stringBuilderPushStr(translator->codeBuf, sectionCode)
+    || pushInstruction(translator, " L%d\n",
+        ((BFCodeLex *)getElementVLArray(translator->syntaxTree->raw,
+        sectionNode->children.section.endIndex))->children.branch.sectionID);
 }
 
 static int
@@ -267,19 +283,22 @@ SPACES "tape: resb " XSTR(TAPE_LENGTH) "\n"
 SPACES "global _start\n"
 "_start:\n"
 SPACES "mov rbp, rsp\n"
-SPACES "mov rbx, tape\n";
+SPACES "mov " XSTR(linux_x86_64_pointer_reg) ", tape\n";
 
     return stringBuilderPushStr(translator->codeBuf, startCode);
 }
 
 static int
-linux_x86_64_emitJump(Translator *translator, int sectionID)
+linux_x86_64_emitJump(Translator *translator, const BFCodeLex *node)
 {
     static const char *jumpCode =
 SPACES "cmp BYTE [" XSTR(linux_x86_64_pointer_reg)"], 0\n"
 SPACES "jne";
 
-    return pushInstruction(translator, "%s L%d\n", jumpCode, sectionID);
+    return pushInstruction(translator, "%s L%d\nL%d:\n", jumpCode, 
+        ((BFCodeLex *)getElementVLArray(translator->syntaxTree->raw,
+        node->children.branch.sectIndex))->children.section.sectionID,
+        node->children.branch.sectionID);
 }
 
 static int

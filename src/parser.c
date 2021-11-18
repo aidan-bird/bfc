@@ -10,7 +10,7 @@
 
 typedef const BFIR * (*ParsingFunc)(BFSyntaxTree *, const BFIR *,
     Array **section);
-int pushBFSection(BFSyntaxTree *syntaxTree, Array **section, int sectionID);
+int pushBFSection(BFSyntaxTree *syntaxTree, Array **section);
 int pushBFCodeSequence(BFSyntaxTree *syntaxTree, const BFIR *bfcode, size_t n,
     LexType lexType, Array **section);
 const BFIR *parseIOExpr(BFSyntaxTree *syntaxTree, const BFIR *bfcode,
@@ -59,7 +59,8 @@ error1:;
 }
 
 int
-pushBFBranch(BFSyntaxTree *syntaxTree, Array **section, int sectionIndex)
+pushBFBranch(BFSyntaxTree *syntaxTree, Array **section, int sectionIndex,
+    size_t *outDescriptorIndex)
 {
     size_t nextIndex;
     BFCodeLex nextDescriptor;
@@ -71,6 +72,7 @@ pushBFBranch(BFSyntaxTree *syntaxTree, Array **section, int sectionIndex)
         .isSection = 0,
         .children.branch = {
             .sectIndex = sectionIndex,
+            .sectionID = syntaxTree->nextSectionID++,
         },
     };
     /* push section descriptor */
@@ -79,6 +81,8 @@ pushBFBranch(BFSyntaxTree *syntaxTree, Array **section, int sectionIndex)
         goto error1;
     }
     nextIndex = lastIndexVLArray(syntaxTree->raw);
+    if (outDescriptorIndex)
+        *outDescriptorIndex = nextIndex;
     if (section) {
         if (!tryPushArray(section, &nextIndex))
             goto error1;
@@ -89,11 +93,11 @@ error1:;
 }
 
 int
-pushBFSection(BFSyntaxTree *syntaxTree, Array **section, int sectionID)
+pushBFSection(BFSyntaxTree *syntaxTree, Array **section)
 {
     size_t nextSectionIndex;
     BFCodeLex nextSectionDescriptor;
-    
+
     /* initialize section descriptor */
     nextSectionDescriptor = (BFCodeLex) {
         .count = 0,
@@ -101,7 +105,7 @@ pushBFSection(BFSyntaxTree *syntaxTree, Array **section, int sectionID)
         .isSection = 1,
         .children.section = {
             .seqIndex = 0,
-            .sectionID = sectionID,
+            .sectionID = syntaxTree->nextSectionID++,
         },
     };
     /* push section descriptor */
@@ -200,6 +204,7 @@ parseSection(BFSyntaxTree *syntaxTree, const BFIR *bfcode, Array **section)
 {
     const BFIR *ret;
     size_t sectionIndex;
+    size_t branchDescriptorIndex;
 
     if (bfcode->keyword != BFKeyword_setLabel)
         return bfcode;
@@ -209,7 +214,10 @@ parseSection(BFSyntaxTree *syntaxTree, const BFIR *bfcode, Array **section)
         fputs("Warning: unmatched [ bracket", stderr);
         return NULL;
     }
-    pushBFBranch(syntaxTree, section, sectionIndex);
+    /* XXX check for return value error */
+    pushBFBranch(syntaxTree, section, sectionIndex, &branchDescriptorIndex);
+    ((BFCodeLex *)getElementVLArray(syntaxTree->raw, sectionIndex))->
+        children.section.endIndex = branchDescriptorIndex;
     return ret + 1;
 }
 
@@ -223,9 +231,8 @@ parseAnnonSection(BFSyntaxTree *syntaxTree, const BFIR *bfcode,
     Array *thisSectionChildren;
     size_t thisSectionIndex;
 
-    if (pushBFSection(syntaxTree, section, syntaxTree->nextSectionID))
+    if (pushBFSection(syntaxTree, section))
         goto error1;
-    syntaxTree->nextSectionID++;
     thisSectionIndex = lastIndexVLArray(syntaxTree->raw);
     thisSectionChildrenIsArray = 1;
     thisSectionChildren = newArray(-1, -1, sizeof(BFCodeLex *));
@@ -257,13 +264,6 @@ error2:;
         free(thisSectionChildren);
 error1:;
     return NULL;
-}
-
-void
-deleteBFSyntaxTree(BFSyntaxTree *tree)
-{
-    deleteVLArray(tree->raw);
-    free(tree);
 }
 
 int
@@ -358,5 +358,12 @@ error2:;
     deleteVLArray(raw);
 error1:;
     return NULL;
+}
+
+void
+deleteBFSyntaxTree(BFSyntaxTree *tree)
+{
+    deleteVLArray(tree->raw);
+    free(tree);
 }
 

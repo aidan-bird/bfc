@@ -14,7 +14,6 @@
 int
 main(int argc, char **argv)
 {
-    char *str;
     char *asmCode;
     char *src;
     Array *bfir;
@@ -22,21 +21,36 @@ main(int argc, char **argv)
     Translator *trans;
 
     initBFCIR();
-    src = readTextFile(stdin, NULL);
+    if (!(src = readTextFile(stdin, NULL)))
+        goto error1;
     removeNonBFKeywordsInplace(src);
-    bfir = srcToBFIR(src);
-    tree = parseBF(bfir);
-    // str = printBFSyntaxTree(tree);
-    // puts(str);
-    trans = newTranslator(ISA_x86_64, Platform_linux, tree);
-    translate(trans);
-    asmCode = translateToString(trans, NULL);
-    if (asmCode)
-        puts(asmCode);
-    if (str)
-        free(str);
-    deleteBFSyntaxTree(tree);
-    free((char *)src);
+    if (!(bfir = srcToBFIR(src)))
+        goto error2;
+    if (!(tree = parseBF(bfir)))
+        goto error3;
+    if (!(trans = newTranslator(ISA_x86_64, Platform_linux, tree)))
+        goto error4;
+    if (translate(trans))
+        goto error5;
+    if (!(asmCode = translateToString(trans, NULL)))
+        goto error6;
+    puts(asmCode);
+    free(src);
     deleteArray(bfir);
+    deleteBFSyntaxTree(tree);
+    deleteTranslator(trans);
+    free(asmCode);
     return 0;
+error6:
+error5:
+    deleteTranslator(trans);
+error4:
+    deleteBFSyntaxTree(tree);
+error3:
+    deleteArray(bfir);
+error2:
+    free(src);
+error1:
+    fputs("Errors occurred during compilation.", stderr);
+    return 1;
 }
