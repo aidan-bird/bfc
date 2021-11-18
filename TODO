@@ -1,0 +1,23 @@
+List of things to do,
+
+1) Use stringbuilder instead of VLArray for 
+printBFSyntaxTreeRecurse()
+
+2) There is still some memory being used after termination.
+
+3) documentation
+
+4) cli arguments for setting the ISA, OS, and tape length
+
+5) further testing! There is a segfault on certain inputs.
+
+6) IA32 + linux assembly output
+
+7) compiler optimizations
+
+8) there is some common code in functions like in
+pushBFSection(), pushBFCodeSequence(), and pushBFBranch(). Simplify these.
+
+9) use more static declarations for modules
+
+10) BF source code formatter using printBFSyntaxTreeRecurse()

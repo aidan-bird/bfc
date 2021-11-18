@@ -57,13 +57,6 @@ initBFCIR()
 }
 
 /*
- * REQUIRES
- * none
- *
- * MODIFIES
- * none
- *
- * EFFECTS
  * returns non-zero if c is a BF keyword
  */
 int
@@ -85,9 +78,6 @@ isBFCKeyword(int c)
 }
 
 /*
- * REQUIRES
- * none
- *
  * MODIFIES
  * src
  *
@@ -112,12 +102,6 @@ removeNonBFKeywordsInplace(char *src)
 }
 
 /*
- * REQUIRES
- * none
- *
- * MODIFIES
- * none
- *
  * EFFECTS
  * counts the number of consecutive reoccurring chars starting at str
  */
@@ -137,9 +121,6 @@ countConsecutiveChars(const char *str)
 /*
  * REQUIRES
  * src only contains BF keywords
- *
- * MODIFIES
- * none
  *
  * EFFECTS
  * creates an array of BFIR from BF src.
@@ -180,6 +161,9 @@ error1:;
     return NULL;
 }
 
+/*
+ * returns non-zero if keyword is a basic BF keyword.
+ */
 int
 isBasicBFKeyword(BFKeyword keyword)
 {
@@ -194,6 +178,9 @@ isBasicBFKeyword(BFKeyword keyword)
     }
 }
 
+/*
+ * returns non-zero if keyword is a IO keyword
+ */
 int
 isIOBFKeyword(BFKeyword keyword)
 {
@@ -206,6 +193,9 @@ isIOBFKeyword(BFKeyword keyword)
     }
 }
 
+/*
+ * returns non-zero if keyword emits branch instructions
+ */
 int
 isBranchBFKeyword(BFKeyword keyword)
 {
@@ -218,6 +208,17 @@ isBranchBFKeyword(BFKeyword keyword)
     }
 }
 
+/*
+ * REQUIRES
+ * bfir is valid
+ *
+ * MODIFIES
+ * str
+ *
+ * EFFECTS
+ * pushes the keyword associated with the bfir onto str
+ * returns non-zero on error.
+ */
 int
 pushBFIRString(VLArray **str, const BFIR *restrict bfir)
 {

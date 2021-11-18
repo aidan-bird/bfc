@@ -278,6 +278,10 @@ printBFSyntaxTreeWhitespace(VLArray **str, size_t depth)
     return !tryPushVLArray(str, tmp, sizeof(tmp));
 }
 
+/*
+ * TODO
+ * use string builder instead of VLArray
+ */
 int
 printBFSyntaxTreeRecurse(const BFSyntaxTree *tree, const BFCodeLex *node,
     VLArray **str, size_t depth)
@@ -313,6 +317,14 @@ printBFSyntaxTreeRecurse(const BFSyntaxTree *tree, const BFCodeLex *node,
     return 0;
 }
 
+/*
+ * REQUIRES
+ * tree is valid
+ *
+ * EFFECTS
+ * returns a newly allocated string containing the bf source code.
+ * returns NULL on error.
+ */
 char *
 printBFSyntaxTree(const BFSyntaxTree *tree)
 {
@@ -335,6 +347,14 @@ error1:;
     return NULL;
 }
 
+/*
+ * REQUIRES
+ * bfir is valid
+ *
+ * EFFECTS
+ * constructs a syntax tree from an array of bfir.
+ * returns null on error.
+ */
 BFSyntaxTree *
 parseBF(const Array *bfir)
 {
@@ -362,6 +382,16 @@ error1:;
     return NULL;
 }
 
+/*
+ * REQUIRES
+ * tree points to a valid syntax tree 
+ *
+ * MODIFIES
+ * tree
+ *
+ * EFFECTS
+ * deletes tree
+ */
 void
 deleteBFSyntaxTree(BFSyntaxTree *tree)
 {
