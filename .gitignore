@@ -9,3 +9,6 @@ testing
 bfc
 testcase
 testcase*
+compile_commands.json
+.cache
+.cache/*

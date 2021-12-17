@@ -8,27 +8,28 @@
 #include "./bfc_ir.h"
 #include "../alib/src/array.h"
 #include "../alib/src/vlarray.h"
+#include "../alib/src/string_builder.h"
 #include "../alib/src/utils.h"
 
 typedef const BFIR * (*ParsingFunc)(BFSyntaxTree *, const BFIR *,
     Array **section);
-int pushBFSection(BFSyntaxTree *syntaxTree, Array **section);
-int pushBFCodeSequence(BFSyntaxTree *syntaxTree, const BFIR *bfcode, size_t n,
-    LexType lexType, Array **section);
-const BFIR *parseIOExpr(BFSyntaxTree *syntaxTree, const BFIR *bfcode,
+static int pushBFSection(BFSyntaxTree *syntaxTree, Array **section);
+static int pushBFCodeSequence(BFSyntaxTree *syntaxTree, const BFIR *bfcode,
+    size_t n, LexType lexType, Array **section);
+static const BFIR *parseIOExpr(BFSyntaxTree *syntaxTree, const BFIR *bfcode,
     Array **section);
-const BFIR *parseBasicExpr(BFSyntaxTree *syntaxTree, const BFIR *bfcode,
+static const BFIR *parseBasicExpr(BFSyntaxTree *syntaxTree, const BFIR *bfcode,
     Array **section);
-const BFIR *parseExpr(BFSyntaxTree *syntaxTree, const BFIR *bfcode,
+static const BFIR *parseExpr(BFSyntaxTree *syntaxTree, const BFIR *bfcode,
     Array **section);
-const BFIR *parseExprs(BFSyntaxTree *syntaxTree, const BFIR *bfcode,
+static const BFIR *parseExprs(BFSyntaxTree *syntaxTree, const BFIR *bfcode,
     Array **section);
-const BFIR *parseSection(BFSyntaxTree *syntaxTree, const BFIR *bfcode,
+static const BFIR *parseSection(BFSyntaxTree *syntaxTree, const BFIR *bfcode,
     Array **section);
-const BFIR *parseAnnonSection(BFSyntaxTree *syntaxTree, const BFIR *bfcode,
-    Array **section, size_t *outSectionIndex);
+static const BFIR *parseAnnonSection(BFSyntaxTree *syntaxTree,
+    const BFIR *bfcode, Array **section, size_t *outSectionIndex);
 
-int
+static int
 pushBFCodeSequence(BFSyntaxTree *syntaxTree, const BFIR *bfcode, size_t n,
     LexType lexType, Array **section)
 {
@@ -60,7 +61,7 @@ error1:;
     return 1;
 }
 
-int
+static int
 pushBFBranch(BFSyntaxTree *syntaxTree, Array **section, int sectionIndex,
     size_t *outDescriptorIndex)
 {
@@ -94,7 +95,7 @@ error1:;
     return 1;
 }
 
-int
+static int
 pushBFSection(BFSyntaxTree *syntaxTree, Array **section)
 {
     size_t nextSectionIndex;
@@ -125,7 +126,7 @@ error1:;
     return 1;
 }
 
-const BFIR *
+static const BFIR *
 parseIOExpr(BFSyntaxTree *syntaxTree, const BFIR *bfcode, Array **section)
 {
     size_t i;
@@ -147,7 +148,7 @@ error1:;
     return NULL;
 }
 
-const BFIR *
+static const BFIR *
 parseBasicExpr(BFSyntaxTree *syntaxTree, const BFIR *bfcode, Array **section)
 {
     size_t i;
@@ -170,7 +171,7 @@ error1:;
 }
 
 /* expr := IOExpr || BasicExpr || section */
-const BFIR *
+static const BFIR *
 parseExpr(BFSyntaxTree *syntaxTree, const BFIR *bfcode, Array **section)
 {
     const BFIR *ret;
@@ -187,7 +188,7 @@ parseExpr(BFSyntaxTree *syntaxTree, const BFIR *bfcode, Array **section)
 }
 
 /* exprs = expr || expr exprs */
-const BFIR *
+static const BFIR *
 parseExprs(BFSyntaxTree *syntaxTree, const BFIR *bfcode, Array **section)
 {
     const BFIR *ret;
@@ -201,7 +202,7 @@ parseExprs(BFSyntaxTree *syntaxTree, const BFIR *bfcode, Array **section)
 }
 
 /* section := [ exprs ] */
-const BFIR *
+static const BFIR *
 parseSection(BFSyntaxTree *syntaxTree, const BFIR *bfcode, Array **section)
 {
     const BFIR *ret;
@@ -223,7 +224,7 @@ parseSection(BFSyntaxTree *syntaxTree, const BFIR *bfcode, Array **section)
     return ret + 1;
 }
 
-const BFIR *
+static const BFIR *
 parseAnnonSection(BFSyntaxTree *syntaxTree, const BFIR *bfcode,
     Array **section, size_t *outSectionIndex)
 {
@@ -268,23 +269,19 @@ error1:;
     return NULL;
 }
 
-int
-printBFSyntaxTreeWhitespace(VLArray **str, size_t depth)
+static int
+printBFSyntaxTreeWhitespace(StringBuilder *sb, size_t depth)
 {
     char tmp[depth + 1];
 
     memset(tmp, '\t', depth);
     tmp[depth] = '\0';
-    return !tryPushVLArray(str, tmp, sizeof(tmp));
+    return stringBuilderPushStr(sb, tmp);
 }
 
-/*
- * TODO
- * use string builder instead of VLArray
- */
-int
+static int
 printBFSyntaxTreeRecurse(const BFSyntaxTree *tree, const BFCodeLex *node,
-    VLArray **str, size_t depth)
+    StringBuilder *sb, size_t depth)
 {
     const size_t *subNodes;
     const BFCodeLex *subNode;
@@ -297,21 +294,19 @@ printBFSyntaxTreeRecurse(const BFSyntaxTree *tree, const BFCodeLex *node,
         for (size_t i = 0; i < node->count; i++) {
             subNode = (const BFCodeLex *)getElementVLArray(tree->raw,
                 subNodes[i]);
-            if (printBFSyntaxTreeRecurse(tree, subNode, str, depth + 1))
+            if (printBFSyntaxTreeRecurse(tree, subNode, sb, depth + 1))
                 return 1;
         }
     } else {
         /* BASE CASE */
         ir = (const BFIR *)getElementVLArray(tree->raw,
             node->children.sequence.bfCodeIndex);
-        if (printBFSyntaxTreeWhitespace(str, depth))
+        if (printBFSyntaxTreeWhitespace(sb, depth))
             return 1;
-        for (size_t i = 0; i < node->count; i++) {
-            if (pushBFIRString(str, ir + i))
+        for (size_t i = 0; i < node->count; i++)
+            if (stringBuilderPushChar(sb, keywordCharMap[ir[i].keyword]))
                 return 1;
-        }
-        static const char *newlineStr = "\n";
-        if (!tryPushVLArray(str, newlineStr, 2))
+        if (stringBuilderPushChar(sb, '\n'))
             return 1;
     }
     return 0;
@@ -329,20 +324,19 @@ char *
 printBFSyntaxTree(const BFSyntaxTree *tree)
 {
     char *ret;
-    VLArray *tmp;
+    StringBuilder *sb;
 
-    tmp = newVLArray(-1, -1, -1);
-    if (!tmp)
+    if (!(sb = newStringBuilder()))
         goto error1;
-    if (printBFSyntaxTreeRecurse(tree, tree->start, &tmp, 0))
+    if (printBFSyntaxTreeRecurse(tree, tree->start, sb, 0))
         goto error2;
-    ret = toStringVLArray(tmp);
-    if (!ret)
-        goto error2;
-    deleteVLArray(tmp);
+    if (!(ret = stringBuilderToString(sb, NULL)))
+        goto error3;
+    deleteStringBuilder(sb);
     return ret;
+error3:;
 error2:;
-    deleteVLArray(tmp);
+    deleteStringBuilder(sb);
 error1:;
     return NULL;
 }

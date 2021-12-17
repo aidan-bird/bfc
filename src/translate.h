@@ -52,5 +52,6 @@ Translator * newTranslator(ISA isa, PlatformName platform,
 char *translateToString(Translator *translator, size_t *outLen);
 int translate(Translator *translator);
 void deleteTranslator(Translator *translator);
+int pushInstruction(Translator *translator, const char *fmt, ...);
 
 #endif

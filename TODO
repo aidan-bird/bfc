@@ -11,7 +11,7 @@ printBFSyntaxTreeRecurse()
 
 5) further testing! There is a segfault on certain inputs.
 
-6) IA32 + linux assembly output
+DONE 6) IA32 + linux assembly output
 
 7) compiler optimizations
 

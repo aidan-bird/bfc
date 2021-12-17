@@ -1,4 +1,4 @@
-CC=gcc
+CC=clang
 
 SRC_PATH=src
 OBJ_PATH=.obj

@@ -28,7 +28,7 @@ main(int argc, char **argv)
         goto error2;
     if (!(tree = parseBF(bfir)))
         goto error3;
-    if (!(trans = newTranslator(ISA_x86_64, Platform_linux, tree)))
+    if (!(trans = newTranslator(ISA_ia32, Platform_linux, tree)))
         goto error4;
     if (translate(trans))
         goto error5;

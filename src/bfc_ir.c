@@ -108,7 +108,7 @@ removeNonBFKeywordsInplace(char *src)
 size_t
 countConsecutiveChars(const char *str)
 {
-    int c;
+    char c;
     const char *tmp;
 
     c = *str;
