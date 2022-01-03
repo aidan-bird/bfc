@@ -8,7 +8,7 @@ See the [wiki page](https://esolangs.org/wiki/Brainfuck) for more details.
 # Project Details
 
 This project compiles BF into x86 assembly.
-Currently, only 64-bit x86 assembly and Linux is supported.
+Currently, only 64 and 32 bit x86 assembly and Linux is supported.
 The program accepts BF code via `stdin`, and then assembly code is printed to `stdout`.
 Then assemble the output using `nasm`, and then link using `ld` to get an executable.
 The helper script `compile-bf.sh` is used to automate the compilation process.
