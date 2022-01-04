@@ -1,5 +1,6 @@
 #include "../alib/src/utils.h"
 #include "./config.h"
+#include "./utils.h"
 #include "./translate.h"
 #include "./translate_linux_ia32.h"
 

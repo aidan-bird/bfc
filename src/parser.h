@@ -89,6 +89,3 @@ char *printBFSyntaxTree(const BFSyntaxTree *tree);
 void deleteBFSyntaxTree(BFSyntaxTree *tree);
 
 #endif
-
-
-
